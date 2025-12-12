@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # 1. Monitoring (Portainer)
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer_manager
+    restart: always
+    ports:
+      - "9443:9443"
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - server_network
+
+  # 2. Web App (PHP Native)
+  web-auth:
+    build: .
+    container_name: auth_service
+    restart: always
+    ports:
+      - "8080:80"
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      - db-service
+      - keycloak
+    networks:
+      - server_network
+
+  # 3. Database (MySQL - Shared Storage)
+  # Database (data parkir dan data Keycloak)
+  db-service:
+    image: mysql:5.7
+    container_name: database_server
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: app_db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: userpassword
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - server_network
+
+  # 4. Identity Provider (Keycloak - MySQL Backend)
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0.0
+    container_name: keycloak_server
+    command: start-dev
+    environment:
+      # Koneksi Database (Menumpang di db-service)
+      KC_DB: mysql
+      KC_DB_URL: jdbc:mysql://db-service/app_db
+      KC_DB_USERNAME: user
+      KC_DB_PASSWORD: userpassword
+      
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      
+      # Setting HTTP
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: localhost
+    ports:
+      - "8081:8080"
+    depends_on:
+      - db-service
+    networks:
+      - server_network
+
+networks:
+  server_network:
+    driver: bridge
+
+volumes:
+  portainer_data:
+  db_data:
